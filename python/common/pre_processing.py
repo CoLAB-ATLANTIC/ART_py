@@ -11,7 +11,6 @@ import mohid.util.mohid_utils as mohid_utils
 
 PRE_PROCESSING_STRING = "Executing PRE Processing module: "
 
-
 def open_log(filename):
     status_stop = False
     f = open(filename, 'r')
@@ -20,7 +19,6 @@ def open_log(filename):
             status_stop = True
             return (status_stop)
     f.close()
-
 
 def dat_date_change(file_path, logger, current_initial_date, current_final_date):
     file_modifier.modify_start_dat_date(file_path, file_modifier.date_to_mohid_date(current_initial_date), logger)

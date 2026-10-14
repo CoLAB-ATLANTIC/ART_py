@@ -4,7 +4,7 @@ import mohid.mohid_water as mohid_water
 import mohid.mohid_land as mohid_land
 import swan.swan as swan
 import ww3.ww3 as ww3
-import dummy.dummy as dummy
+import nonstandard.nonstandard as nonstandard
 import mohid.util.constants as self
 import common.MailClient as mail
 import datetime
@@ -72,8 +72,8 @@ class ART:
                 known_modules = ['MOHID_WATER', 'MOHID_LAND', 'SWAN', 'WW3']
                 for module_name, enabled in modules.items():
                     if module_name not in known_modules and enabled:
-                        self.logger.info("Starting dummy module for " + module_name)
-                        model = dummy.DummyModel(self, module_name)
+                        self.logger.info("Starting non-standard module for " + module_name)
+                        model = nonstandard.NonStandardModel(self, module_name)
                         model.execute()
             else:
                 self.logger.info("Module Keyword not found. Skipping Simulation...")

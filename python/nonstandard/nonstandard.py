@@ -5,7 +5,7 @@ import common.pre_processing as pre_processing
 import common.post_processing as post_processing
 
 
-class DummyModel:
+class NonStandardModel:
     def __init__(self, art, name):
         self.logger = art.logger
         self.yaml = art.yaml
@@ -16,13 +16,15 @@ class DummyModel:
         self.current_final_date = None
 
     def execute(self):
-        self.logger.info("Executing dummy model for module: " + self.name)
-        artconfig_keys = self.yaml['ART'].keys()
-        simulation_keys = self.yaml['SIMULATION'].keys()
+        self.logger.info("Executing non-standard model for module: " + self.name)
+        artconfig = self.yaml['ART']
+        simulation = self.yaml['SIMULATION']
         days_run = 0
 
-        if 'OPERATIONAL_MODE' in simulation_keys and self.yaml['SIMULATION']['OPERATIONAL_MODE']:
-            self.logger.info("Running Dummy model in Operational Mode")
+        print(artconfig)
+
+        if simulation.get('OPERATIONAL_MODE'):
+            self.logger.info("Running Non-Standard model in Operational Mode")
 
             if 'AUTOMATIC_DATE' in simulation_keys and self.yaml['SIMULATION']['AUTOMATIC_DATE']:
                 today = datetime.datetime.today()
@@ -57,9 +59,16 @@ class DummyModel:
             self.current_final_date = self.current_initial_date + datetime.timedelta(
                 days=self.yaml['SIMULATION']['DAYS_PER_RUN'])
 
-            self.run_processing(artconfig_keys, days_run)
 
-        self.logger.info("Dummy model " + self.name + " finished.")
+            if artconfig.get('PRE_PROCESSING'):
+                self.logger.info("Executing Pre Processing")
+                pre_processing.execute(self.yaml, self.logger, self.current_initial_date, self.current_final_date,days_run)
+
+            if artconfig.get('POST_PROCESSING'):
+                self.logger.info("Executing Post Processing")
+                post_processing.execute(self.yaml, self.logger, self.current_initial_date, self.current_final_date,days_run)
+
+        self.logger.info("Nonstandard model " + self.name + " finished.")
 
     def run_processing(self, artconfig_keys, days_run):
         if 'PRE_PROCESSING' in artconfig_keys and self.yaml['ART']['PRE_PROCESSING']:
