@@ -24,9 +24,9 @@ Current trigger logic is as follows:
   - `CONDITION_DAT`: path to the `.dat` file with all the configuration the script needs to compute the condition.
   - `CONDITION_DAT_DATE_CHANGE` (optional, default true): updates `START` / `END` in the `.dat` file to the current run period before executing the script.
 
-  Both `CONDITION_SCRIPT` and `CONDITION_DAT` must be given (one without the other is an error). The script is executed as `python <CONDITION_SCRIPT> <CONDITION_DAT>` with ART's own interpreter, from the script's folder, and all its output is copied to ART's log.
+  Both `CONDITION_SCRIPT` and `CONDITION_DAT` must be given (one without the other is an error). The script is executed as `python <CONDITION_SCRIPT> <CONDITION_DAT>` with ART's own interpreter, from the script's folder. Its output (stdout and stderr) is written to its own log file, `<ART.LOG.FOLDER_PATH>/conditions/<block>/<START>_<END>.log`, not to ART's main log, which only records where that file is.
 
-  Contract for the script: the last line it prints must be `True` (condition met) or `False` (not met). Anything printed before is just logged.
+  Contract for the script: the last line it prints must be `True` (condition met) or `False` (not met). Anything printed before only goes to the script's log file.
   - `True`: execution continues.
   - `False`: raises `TriggerConditionNotMet` (a `ValueError`), so ART's error routine logs it, sends the error email (if configured) and stops the whole run.
   - Script crash (exit code != 0) or a last line other than `True` / `False`: raises a `ValueError` pointing to the script.
@@ -42,6 +42,8 @@ Current trigger logic is as follows:
         CONDITION_SCRIPT: /home/franklinayala/applications/OvertOpXB1p0/src/regime_watcher.py
         CONDITION_DAT: /home/franklinayala/applications/OvertOpXB1p0/config/regime_watcher.dat
   ```
+
+- The condition script can be used to implement any logic. In case of concurrence of conditions, the script can be used to check all of them and return a single `True` / `False` result. That logics can be implemented in the script itself, so ART does not need to know about it.
 
 
 Questions

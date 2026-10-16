@@ -149,12 +149,18 @@ class Trigger:
         result = subprocess.run([sys.executable, script, str(dat_file)], cwd=os.path.dirname(script),
                                 capture_output=True, text=True)
 
-        for line in (result.stdout + result.stderr).splitlines():
-            self.logger.info(line)
+        # The script output goes to its own log file instead of ART's main log
+        log_folder = Path(self.yaml['ART']['LOG']['FOLDER_PATH']) / "checked_triggers" / self.block
+        log_folder.mkdir(parents=True, exist_ok=True)
+        log_file = log_folder / self._file_name(current_initial_date).replace(".dat", ".log")
+        with open(log_file, 'w') as log:
+            log.write(result.stdout)
+            log.write(result.stderr)
+        self.logger.info("Trigger condition output of " + self.block + " written to " + str(log_file))
 
         if result.returncode != 0:
             raise ValueError("Trigger condition script " + script + " failed with exit code " +
-                             str(result.returncode) + ".")
+                             str(result.returncode) + ". See " + str(log_file) + ".")
 
         # The condition result is the last non-empty line printed by the script: True or False
         lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
@@ -172,10 +178,10 @@ class Trigger:
     def write(self, current_initial_date, current_final_date, status):
         """ Writes the trigger file of the block with the given status ("Running" or "Finished"). """
 
-        if not self.enabled:
+        if not self.enabled or 'WRITE_TRIGGER' not in self.config:
             return
 
-        if not ('WRITE_TRIGGER' in self.config and self.config['WRITE_TRIGGER']):
+        if ('WRITE_TRIGGER' in self.config) and not self.config['WRITE_TRIGGER']:
             self.logger.info("Output trigger not set. WRITE_TRIGGER parameter is empty.")
             return
 

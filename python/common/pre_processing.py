@@ -57,11 +57,10 @@ def execute(yaml, logger, current_initial_date, current_final_date,days_run):
                         subprocess.run(run_array, stdout=log, cwd=os.path.dirname(block_dict['EXE_PATH']))
                         log.close()
                 else:
-
-                    # write_trigger(yaml, logger, block, days_per_run,current_initial_date,current_final_date, stage="Running")
-                    # trigger.write(current_initial_date, current_final_date, stage="Running")
+                    trigger.write(current_initial_date, current_final_date, status="Running")
                     
                     logger.info(PRE_PROCESSING_STRING + block_dict['EXE_PATH'])
+                    print(run_array)
                     subprocess.run(run_array, cwd=os.path.dirname(block_dict['FLAGS']))
                     
                     if check_log == True:
@@ -69,20 +68,16 @@ def execute(yaml, logger, current_initial_date, current_final_date,days_run):
                         if status_stop == True:
                             logger.info(PRE_PROCESSING_STRING + "NOT SUCCESSFULL " + block)
                         else:
-                            pass
-                            # write_trigger(yaml, logger, block, days_per_run,current_initial_date,current_final_date, stage="Finished")
-                            # trigger.write(current_initial_date, current_final_date, stage="Finished")
+                            trigger.write(current_initial_date, current_final_date, status="Finished")
                     else:
-                        pass
-                        # write_trigger(yaml, logger, block, days_per_run,current_initial_date,current_final_date, stage="Finished")
-                        # trigger.write(current_initial_date, current_final_date, stage="Finished")
+                        trigger.write(current_initial_date, current_final_date, status="Finished")
     
             else:
                 if 'OUTPUT_TO_FILE' in block_keys and block_dict['OUTPUT_TO_FILE']:
                     with open(block_dict['OUTPUT_FILEPATH'], 'w') as log:
                         
-                        #write_trigger(yaml, logger, block, days_per_run,current_initial_date,current_final_date, stage="Running")
-                        # trigger.write(current_initial_date, current_final_date, stage="Running")
+                        #write_trigger(yaml, logger, block, days_per_run,current_initial_date,current_final_date, status="Running")
+                        # trigger.write(current_initial_date, current_final_date, status="Running")
 
                         logger.info(PRE_PROCESSING_STRING + block_dict['EXE_PATH'])
                         subprocess.run(block_dict['EXE_PATH'], stdout=log, cwd=os.path.dirname(block_dict['EXE_PATH']))
@@ -93,11 +88,11 @@ def execute(yaml, logger, current_initial_date, current_final_date,days_run):
                         if status_stop == True:
                             logger.info(PRE_PROCESSING_STRING + "NOT SUCCESSFULL " + block)
                         else:
-                            # write_trigger(yaml, logger, block, days_per_run,current_initial_date,current_final_date, stage="Finished")
-                            trigger.write(current_initial_date, current_final_date, stage="Finished")
+                            # write_trigger(yaml, logger, block, days_per_run,current_initial_date,current_final_date, status="Finished")
+                            trigger.write(current_initial_date, current_final_date, status="Finished")
                     else:
-                        # write_trigger(yaml, logger, block, days_per_run,current_initial_date,current_final_date, stage="Finished")
-                        trigger.write(current_initial_date, current_final_date, stage="Finished")
+                        # write_trigger(yaml, logger, block, days_per_run,current_initial_date,current_final_date, status="Finished")
+                        trigger.write(current_initial_date, current_final_date, status="Finished")
                 else:
                     # trigger for running status before executing the sub-tool
                     trigger.write(current_initial_date, current_final_date, status="Running")
