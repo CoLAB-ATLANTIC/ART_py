@@ -21,12 +21,12 @@ class NonStandardModel:
         simulation = self.yaml['SIMULATION']
         days_run = 0
 
-        print(artconfig)
+        # print(artconfig)
 
         if simulation.get('OPERATIONAL_MODE'):
             self.logger.info("Running Non-Standard model in Operational Mode")
 
-            if 'AUTOMATIC_DATE' in simulation_keys and self.yaml['SIMULATION']['AUTOMATIC_DATE']:
+            if simulation.get('AUTOMATIC_DATE'):
                 today = datetime.datetime.today()
             else:
                 print(self.yaml['SIMULATION'])
@@ -69,13 +69,3 @@ class NonStandardModel:
                 post_processing.execute(self.yaml, self.logger, self.current_initial_date, self.current_final_date,days_run)
 
         self.logger.info("Nonstandard model " + self.name + " finished.")
-
-    def run_processing(self, artconfig_keys, days_run):
-        if 'PRE_PROCESSING' in artconfig_keys and self.yaml['ART']['PRE_PROCESSING']:
-            self.logger.info("Executing Pre Processing")
-            pre_processing.execute(self.yaml, self.logger, self.current_initial_date, self.current_final_date,days_run)
-
-        if 'POST_PROCESSING' in artconfig_keys and self.yaml['ART']['POST_PROCESSING']:
-            print("Executing Post Processing")
-            self.logger.info("Executing Post Processing")
-            post_processing.execute(self.yaml, self.logger, self.current_initial_date, self.current_final_date,days_run)
