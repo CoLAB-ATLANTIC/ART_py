@@ -2,7 +2,8 @@
 import ruamel.yaml as yaml
 
 import datetime
-import mohid.util.constants as static
+# import mohid.util.constants as static
+import utils.constants as static
 from pathlib import Path
 
 

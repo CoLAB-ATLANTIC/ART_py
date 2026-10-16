@@ -5,12 +5,12 @@ Current trigger logic is as follows:
 - Trigger class (`python/common/trigger.py`): the old `check_triggers` / `write_trigger` functions of `pre_processing.py` were moved into a `Trigger` class, built once per block (`Trigger(yaml, logger, block, section='PRE_PROCESSING')`). It reads the block's `TRIGGER` subtree only when `ENABLE` is set; otherwise every method returns without doing anything. `post_processing.py` still uses the old functions.
 
 - Execution order per block in `pre_processing.execute`:
-  1. `trigger.check(days_run, current_initial_date)`: waits for the trigger files of the dependencies.
+  1. `trigger.check(repeat_index, current_initial_date)`: waits for the trigger files of the dependencies.
   2. `trigger.check_condition(current_initial_date, current_final_date)`: runs the condition script (see below).
   3. `trigger.write(..., status="Running")` before running the block's executable.
   4. `trigger.write(..., status="Finished")` after it, when the log check (if any) passes.
 
-- `check`: only runs when `CHECK_ALL` is true and on the first run (`days_run == 0`). For each folder in `FOLDERS_TO_WATCH` it waits for `<folder><START>_<END>.dat` to exist and then for its `STATUS` line to be `FINISHED`. If the maximum waiting time is reached, it logs it and resumes execution anyway (it never stops the run).
+- `check`: only runs when `CHECK_ALL` is true and on the first run (`repeat_index == 0`, i.e. not the `RUN_TWICE` repetition). For each folder in `FOLDERS_TO_WATCH` it waits for `<folder><START>_<END>.dat` to exist and then for its `STATUS` line to be `FINISHED`. If the maximum waiting time is reached, it logs it and resumes execution anyway (it never stops the run).
 
 - Time units are now part of the keyword names:
   - `TRIGGER_MAX_WAIT` -> `TRIGGER_MAX_WAIT_H` (hours, default `DEFAULT_MAX_WAIT_H = 6`).

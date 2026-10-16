@@ -5,8 +5,10 @@ import time
 import subprocess
 from pathlib import Path
 
-import mohid.util.file_modifier as file_modifier
-import mohid.util.constants as static
+# import mohid.util.file_modifier as file_modifier
+import utils.file_modifier as file_modifier
+# import mohid.util.constants as static
+import utils.constants as static
 
 
 class TriggerConditionNotMet(ValueError):
@@ -39,7 +41,7 @@ class Trigger:
         final_date = tmp_date.strftime(self.DATE_FORMAT)
         return initial_date + "_" + final_date + ".dat"
 
-    def check(self, days_run, current_initial_date):
+    def check(self, repeat_index, current_initial_date):
         """ Checks the trigger entries for correct configuration and waits for the trigger files of the
         dependencies to be FINISHED.
         """
@@ -50,7 +52,7 @@ class Trigger:
         # Assumimos que por defeito check = false
         check = self.config.get('CHECK_ALL', False)
 
-        if not check or days_run != 0:
+        if not check or repeat_index != 0:
             return
 
         if 'FOLDERS_TO_WATCH' in self.config:

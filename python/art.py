@@ -5,7 +5,8 @@ import mohid.mohid_land as mohid_land
 import swan.swan as swan
 import ww3.ww3 as ww3
 import nonstandard.nonstandard as nonstandard
-import mohid.util.constants as self
+# import mohid.util.constants as self
+import utils.constants as self
 import common.MailClient as mail
 import datetime
 import os.path

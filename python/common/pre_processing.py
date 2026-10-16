@@ -1,12 +1,15 @@
 import subprocess
-import mohid.util.file_modifier as file_modifier
+# import mohid.util.file_modifier as file_modifier
+import utils.file_modifier as file_modifier
 import os
 from pathlib import Path
 
-import mohid.util.constants as static
+# import mohid.util.constants as static
+import utils.constants as static
 import datetime
 import time
-import mohid.util.mohid_utils as mohid_utils
+# import mohid.util.mohid_utils as mohid_utils
+import utils.mohid_utils as mohid_utils
 from common.trigger import Trigger
 
 
@@ -25,7 +28,7 @@ def dat_date_change(file_path, logger, current_initial_date, current_final_date)
     file_modifier.modify_start_dat_date(file_path, file_modifier.date_to_mohid_date(current_initial_date), logger)
     file_modifier.modify_end_dat_date(file_path, file_modifier.date_to_mohid_date(current_final_date), logger)
 
-def execute(yaml, logger, current_initial_date, current_final_date,days_run):
+def execute(yaml, logger, current_initial_date, current_final_date,repeat_index):
     
     for block in yaml['PRE_PROCESSING']:
         block_keys = yaml['PRE_PROCESSING'][block].keys()
@@ -37,7 +40,7 @@ def execute(yaml, logger, current_initial_date, current_final_date,days_run):
 
             # Trigger logic execution per sub-tool
             trigger = Trigger(yaml, logger, block)
-            trigger.check(days_run, current_initial_date)
+            trigger.check(repeat_index, current_initial_date)
             trigger.check_condition(current_initial_date, current_final_date)
 
             check_log=False
@@ -60,7 +63,6 @@ def execute(yaml, logger, current_initial_date, current_final_date,days_run):
                     trigger.write(current_initial_date, current_final_date, status="Running")
                     
                     logger.info(PRE_PROCESSING_STRING + block_dict['EXE_PATH'])
-                    print(run_array)
                     subprocess.run(run_array, cwd=os.path.dirname(block_dict['FLAGS']))
                     
                     if check_log == True:

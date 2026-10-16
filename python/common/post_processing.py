@@ -1,12 +1,15 @@
 import subprocess
-import mohid.util.file_modifier as file_modifier
+# import mohid.util.file_modifier as file_modifier
+import utils.file_modifier as file_modifier
 import os
 from pathlib import Path
 
-import mohid.util.constants as static
+# import mohid.util.constants as static
+import utils.constants as static
 import datetime
 import time
-import mohid.util.mohid_utils as mohid_utils
+# import mohid.util.mohid_utils as mohid_utils
+import utils.mohid_utils as mohid_utils
 
 
 POST_PROCESSING_STRING = "Executing POST Processing module: "
@@ -26,7 +29,7 @@ def dat_date_change(file_path, logger, current_initial_date, current_final_date)
     file_modifier.modify_start_dat_date(file_path, file_modifier.date_to_mohid_date(current_initial_date), logger)
     file_modifier.modify_end_dat_date(file_path, file_modifier.date_to_mohid_date(current_final_date), logger)
 
-def execute(yaml, logger, current_initial_date, current_final_date,days_run):
+def execute(yaml, logger, current_initial_date, current_final_date,repeat_index):
     
     for block in yaml['POST_PROCESSING']:
         block_keys = yaml['POST_PROCESSING'][block].keys()
@@ -36,7 +39,7 @@ def execute(yaml, logger, current_initial_date, current_final_date,days_run):
 
             days_per_run = yaml['SIMULATION']['DAYS_PER_RUN']
 
-            check_triggers(yaml, logger, block, days_run, current_initial_date)
+            check_triggers(yaml, logger, block, repeat_index, current_initial_date)
 
             check_log=False
             if 'LOGFILE_CHECK' in block_keys and block_dict['LOGFILE_CHECK']:
@@ -108,7 +111,7 @@ def execute(yaml, logger, current_initial_date, current_final_date,days_run):
 
 
 
-def check_triggers(yaml,logger, block, days_run, current_initial_date):
+def check_triggers(yaml,logger, block, repeat_index, current_initial_date):
                      
         """ Receives a yaml config file with only the trigger subtree and checks the trigger entries for correct
         configuration. Checks for dependencies within the models. The execution is never interrupted by this function,
@@ -131,7 +134,7 @@ def check_triggers(yaml,logger, block, days_run, current_initial_date):
 
             if check:
                 #if days_run == 0 or check:   ?????? ver esta questão
-                if days_run == 0 :
+                if repeat_index == 0 :
 
                     if 'FOLDERS_TO_WATCH' in trigger_config:
                         folders = trigger_config['FOLDERS_TO_WATCH']

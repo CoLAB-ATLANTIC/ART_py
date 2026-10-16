@@ -1,15 +1,20 @@
 from pathlib import Path
 from shutil import copy
 from common import logger
-import mohid.util.constants as static
-import mohid.util.file_modifier as file_modifier
+# import mohid.util.constants as static
+import utils.constants as static
+# import mohid.util.file_modifier as file_modifier
+import utils.file_modifier as file_modifier
 import datetime
 import glob
 import os.path
 import common.pre_processing as pre_processing
 import common.post_processing as post_processing
-import mohid.util.folder_utils as folder_utils
-import mohid.util.mohid_utils as mohid_utils
+# import mohid.util.folder_utils as folder_utils
+import utils.folder_utils as folder_utils
+# import mohid.util.mohid_utils as mohid_utils
+import utils.mohid_utils as mohid_utils
+from common.model_base import ModelBase
 import subprocess
 import time
 import multiprocessing
@@ -17,7 +22,8 @@ import multiprocessing
 import re
 
 
-class MohidWater:
+# class MohidWater:
+class MohidWater(ModelBase):  # keeps its own execute/set_global_dates for now; ModelBase provides the common cycle
     def __init__(self, art):
         self.logger = art.logger
         self.yaml = art.yaml
@@ -28,10 +34,10 @@ class MohidWater:
         self.current_final_date = None
 
     def execute(self):
-        self.running_mode()
+        self.set_global_dates()
         artconfig_keys = self.yaml['ART'].keys()
         simulation_keys = self.yaml['SIMULATION'].keys()
-        days_run = 0
+        repeat_index = 0
         if 'OPERATIONAL_MODE' in self.yaml['SIMULATION'].keys() and self.yaml['SIMULATION']['OPERATIONAL_MODE']:
             self.logger.info("Running Mohid Water in Operational Mode")
 
@@ -67,12 +73,12 @@ class MohidWater:
 
                 if 'PRE_PROCESSING' in artconfig_keys and self.yaml['ART']['PRE_PROCESSING']:
                     self.logger.info("Executing Pre Processing")
-                    pre_processing.execute(self.yaml, self.logger, self.current_initial_date, self.current_final_date,days_run)
+                    pre_processing.execute(self.yaml, self.logger, self.current_initial_date, self.current_final_date,repeat_index)
                 if 'RUN_SIMULATION' in artconfig_keys and self.yaml['ART']['RUN_SIMULATION']:
-                    self.process_models(days_run)
+                    self.run_simulation(repeat_index)
                 if 'POST_PROCESSING' in artconfig_keys and self.yaml['ART']['POST_PROCESSING']:
                     self.logger.info("Executing Post Processing")
-                    post_processing.execute(self.yaml, self.logger, self.current_initial_date, self.current_final_date,days_run)
+                    post_processing.execute(self.yaml, self.logger, self.current_initial_date, self.current_final_date,repeat_index)
                     # thread = threading.Thread(target=post_processing.execute, args=(self,))
                     # thread = threading.Thread(target=post_processing.execute, args=(self.yaml, self.logger, self.current_initial_date, self.current_final_date))
                     # thread.start()
@@ -103,22 +109,22 @@ class MohidWater:
                     self.logger.info("========================================")
                     if 'PRE_PROCESSING' in artconfig_keys and self.yaml['ART']['PRE_PROCESSING']:
                         self.logger.info("Executing Pre Processing")
-                        pre_processing.execute(self.yaml, self.logger, self.current_initial_date, self.current_final_date,days_run)
+                        pre_processing.execute(self.yaml, self.logger, self.current_initial_date, self.current_final_date,repeat_index)
                     if self.yaml['ART']['RUN_SIMULATION']:
-                        self.process_models(days_run)
+                        self.run_simulation(repeat_index)
                     if 'POST_PROCESSING' in artconfig_keys and self.yaml['ART']['POST_PROCESSING']:
-                        post_processing.execute(self.yaml, self.logger, self.current_initial_date, self.current_final_date,days_run)
+                        post_processing.execute(self.yaml, self.logger, self.current_initial_date, self.current_final_date,repeat_index)
                         self.logger.info("Executing Post Processing")
                     if 'RUN_TWICE' in self.yaml['ART'].keys() and self.yaml['ART']['RUN_TWICE']:
                         # Only run next day after repeating current day. Useful for up-scaling
-                        days_run += 1
-                        if days_run == 1:
+                        repeat_index += 1
+                        if repeat_index == 1:
                             self.current_initial_date = self.current_initial_date + datetime.timedelta(
                                 days=self.yaml['SIMULATION']['DAYS_PER_RUN'])
                             self.current_final_date = self.current_final_date + datetime.timedelta(
                                 days=self.yaml['SIMULATION']['DAYS_PER_RUN'])
-                        elif days_run == 2:
-                            days_run = 0
+                        elif repeat_index == 2:
+                            repeat_index = 0
                     if self.yaml['SIMULATION']['MONTH_MODE']:
                         self.current_initial_date = self.current_final_date
                         if self.current_initial_date.month == 12:
@@ -142,10 +148,10 @@ class MohidWater:
     Main cycle for the ART run. It has all the functions that are needed for a project.
     '''
 
-    def process_models(self, days_run: int) :
+    def run_simulation(self, repeat_index: int) :
         main_path = Path(self.yaml['MOHID_WATER']['MAIN_PATH'])
         days_per_run = self.yaml['SIMULATION']['DAYS_PER_RUN']
-        self.check_triggers(days_run, self.yaml['SIMULATION']['DAYS_PER_RUN'])
+        self.check_triggers(repeat_index, self.yaml['SIMULATION']['DAYS_PER_RUN'])
         mohid_water_config = self.yaml['MOHID_WATER']
         mohid_water_models = mohid_water_config['MODELS']
         run_mohidddc = 1
@@ -173,7 +179,7 @@ class MohidWater:
         self.write_trigger(self.yaml['MOHID_WATER']['MAIN_PATH'],
                            days_per_run, stage="Finished")
 
-    def running_mode(self):
+    def set_global_dates(self):
         if 'SIMULATION' not in self.yaml:
             raise ValueError("SIMULATION key not defined in yaml configuration file.")
         simulation_keys = self.yaml['SIMULATION'].keys()
@@ -554,7 +560,7 @@ class MohidWater:
             copy(file, file_destination)
 
 
-    def check_triggers(self, days_run: int, days_per_run: int):
+    def check_triggers(self, repeat_index: int, days_per_run: int):
         """ Receives a yaml config file with only the trigger subtree and checks the trigger entries for correct
         configuration. Checks for dependencies within the models. The execution is never interrupted by this function,
         any errors found are reported in the logger.
@@ -566,7 +572,7 @@ class MohidWater:
             else:
                 check = True
 
-            if days_run == 0 or check:
+            if repeat_index == 0 or check:
 
                 if 'FOLDERS_TO_WATCH' in trigger_config:
                     folders = trigger_config['FOLDERS_TO_WATCH']

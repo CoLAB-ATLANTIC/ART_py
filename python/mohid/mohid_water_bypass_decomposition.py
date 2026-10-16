@@ -1,15 +1,19 @@
 from pathlib import Path
 from shutil import copy
 from common import logger
-import mohid.util.constants as static
-import mohid.util.file_modifier as file_modifier
+# import mohid.util.constants as static
+import utils.constants as static
+# import mohid.util.file_modifier as file_modifier
+import utils.file_modifier as file_modifier
 import datetime
 import glob
 import os.path
 import common.pre_processing as pre_processing
 import common.post_processing as post_processing
-import mohid.util.folder_utils as folder_utils
-import mohid.util.mohid_utils as mohid_utils
+# import mohid.util.folder_utils as folder_utils
+import utils.folder_utils as folder_utils
+# import mohid.util.mohid_utils as mohid_utils
+import utils.mohid_utils as mohid_utils
 import subprocess
 import time
 import multiprocessing
