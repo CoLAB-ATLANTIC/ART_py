@@ -76,7 +76,7 @@ class MohidWater(ModelBase):
         self.run_executable(exe_path, os.path.dirname(tree_path), output_file_name)
         self._verify_log(output_file_name, MOHID_SUCCESS_MESSAGES, "MOHID RUN")
 
-        if self.mpi_enabled and self.run_consolidation_enable
+        if self.mpi_enabled and self.run_consolidation_enabled:
             self.run_ddc()
 
     def run_ddc(self):

@@ -1,21 +1,13 @@
-#import yaml
-import ruamel.yaml as yaml
-
+import yaml
 import datetime
-# import mohid.util.constants as static
 import utils.constants as static
 from pathlib import Path
-
 
 def open_yaml_file(path):
     file_path = Path(path)
 
     with open(file_path, 'r') as yml_file:
         return yaml.safe_load(yml_file)
-        #yaml = YAML(typ='safe')
-#        yaml.load(yml_file)
-        
-
 
 def validate_yaml_section(yaml_file, section_name, mandatory_list):
     mandatory_parameters = set(mandatory_list).difference(set(yaml_file[section_name]))
@@ -23,7 +15,6 @@ def validate_yaml_section(yaml_file, section_name, mandatory_list):
         raise ValueError("Missing mandatory parameter on " + section_name + ": " + str(mandatory_parameters) + ".")
     if None in list(yaml_file[section_name].values()):
         raise ValueError("Blank value on " + section_name + ".")
-
 
 #TODO mohid validation
 def validate_yaml_file(yaml_dict):
@@ -36,7 +27,6 @@ def validate_yaml_file(yaml_dict):
         for model in yaml_dict.keys():
             if model != 'MOHID_WATER' and model != 'PREPROCESSING' and model != 'POSTPROCESSING' and model != 'ART':
                 validate_yaml_section(yaml_dict[model], model, [])
-
 
 def validate_date(yaml, logger):
     logger.debug("Validating Dates")
@@ -56,7 +46,6 @@ def validate_date(yaml, logger):
     except KeyError:
         logger.warning("Either startDate or endDate were not specified in the configuration file ")
         logger.warning("Will from now on assume that startDate is TODAY and a forecast of 3 days")
-
 
 def read_attribute(cfg, attribute):
     return cfg[attribute]
