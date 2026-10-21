@@ -18,22 +18,36 @@ class TriggerConditionNotMet(ValueError):
 
 
 class Trigger:
-    """ Handles the trigger files of a processing block: checking the triggers of the blocks it depends on and
-    writing its own trigger file. The execution is never interrupted by this class, any errors found are reported
-    in the logger.
+    """ Handles the trigger files of a processing block or of a whole model run: checking the triggers of what it
+    depends on and writing its own trigger file. The execution is never interrupted by this class, any errors found
+    are reported in the logger.
+
+    Use Trigger.for_block for a PRE_PROCESSING / POST_PROCESSING block (yaml[section][block]['TRIGGER']) and
+    Trigger.for_model for a model run (top-level yaml['TRIGGER']).
     """
 
     DATE_FORMAT = "%Y-%m-%d"
 
-    def __init__(self, yaml, logger, block, section='PRE_PROCESSING'):
+    def __init__(self, yaml, logger, name, trigger_config, dest_folder, model_level=False):
         self.yaml = yaml
         self.logger = logger
-        self.block = block
+        self.name = name
         self.days_per_run = yaml['SIMULATION']['DAYS_PER_RUN']
+        self.enabled = bool(trigger_config and trigger_config.get('ENABLE'))
+        self.config = trigger_config if self.enabled else {}
+        self.dest_folder = Path(dest_folder)
+        self.model_level = model_level
 
-        block_dict = yaml[section][block]
-        self.enabled = 'TRIGGER' in block_dict and block_dict['TRIGGER']['ENABLE']
-        self.config = block_dict['TRIGGER'] if self.enabled else {}
+    @classmethod
+    def for_block(cls, yaml, logger, block, section='PRE_PROCESSING'):
+        """ Trigger of a processing block, written to <ART.LOG.FOLDER_PATH>/triggers/<block>/. """
+        return cls(yaml, logger, block, yaml[section][block].get('TRIGGER'),
+                   Path(yaml['ART']['LOG']['FOLDER_PATH']) / "triggers" / block)
+
+    @classmethod
+    def for_model(cls, yaml, logger, name, dest_folder):
+        """ Trigger of a model run, written to dest_folder. """
+        return cls(yaml, logger, name, yaml.get('TRIGGER'), dest_folder, model_level=True)
 
     def _file_name(self, current_initial_date):
         initial_date = current_initial_date.strftime(self.DATE_FORMAT)
@@ -49,11 +63,14 @@ class Trigger:
         if not self.enabled:
             return
 
-        # Assumimos que por defeito check = false
-        check = self.config.get('CHECK_ALL', False)
-
-        if not check or repeat_index != 0:
-            return
+        if self.model_level:
+            # Model run: always checked on the first run, CHECK_ALL (default true) also checks the RUN_TWICE repetition
+            if repeat_index != 0 and not self.config.get('CHECK_ALL', True):
+                return
+        else:
+            # Block: only checked when CHECK_ALL is set, and only on the first run
+            if not self.config.get('CHECK_ALL', False) or repeat_index != 0:
+                return
 
         if 'FOLDERS_TO_WATCH' in self.config:
             folders = self.config['FOLDERS_TO_WATCH']
@@ -72,15 +89,15 @@ class Trigger:
             timer = static.DEFAULT_MAX_WAIT_H * 3600
             self.logger.info(
                 "No waiting time on triggers TRIGGER_MAX_WAIT_H parameter is empty. Assigning default "
-                "max wait time of 6 hours.")
+                f"max wait time of {static.DEFAULT_MAX_WAIT_H} hours.")
 
-        if 'TRIGGER_POLLING_RATE' in self.config:
+        if 'TRIGGER_POLLING_RATE_S' in self.config:
             pooling_rate = self.config['TRIGGER_POLLING_RATE_S']
         else:
             pooling_rate = static.DEFAULT_POLLING_RATE_S
             self.logger.info(
                 "No polling rate on triggers. TRIGGER_POLLING_RATE_S is empty. Assigning "
-                "default polling rate of 120 seconds.")
+                f"default polling rate of {static.DEFAULT_POLLING_RATE_S} seconds.")
 
         if not folders:
             return
@@ -130,7 +147,7 @@ class Trigger:
             return
 
         if 'CONDITION_SCRIPT' not in self.config or 'CONDITION_DAT' not in self.config:
-            raise ValueError("Trigger condition of " + self.block + " needs both CONDITION_SCRIPT and "
+            raise ValueError("Trigger condition of " + self.name + " needs both CONDITION_SCRIPT and "
                              "CONDITION_DAT parameters.")
 
         script = self.config['CONDITION_SCRIPT']
@@ -147,18 +164,18 @@ class Trigger:
             file_modifier.modify_end_dat_date(dat_file, file_modifier.date_to_mohid_date(current_final_date),
                                               self.logger)
 
-        self.logger.info("Checking trigger condition of " + self.block + ": " + script + " " + str(dat_file))
+        self.logger.info("Checking trigger condition of " + self.name + ": " + script + " " + str(dat_file))
         result = subprocess.run([sys.executable, script, str(dat_file)], cwd=os.path.dirname(script),
                                 capture_output=True, text=True)
 
         # The script output goes to its own log file instead of ART's main log
-        log_folder = Path(self.yaml['ART']['LOG']['FOLDER_PATH']) / "checked_triggers" / self.block
+        log_folder = Path(self.yaml['ART']['LOG']['FOLDER_PATH']) / "checked_triggers" / self.name
         log_folder.mkdir(parents=True, exist_ok=True)
         log_file = log_folder / self._file_name(current_initial_date).replace(".dat", ".log")
         with open(log_file, 'w') as log:
             log.write(result.stdout)
             log.write(result.stderr)
-        self.logger.info("Trigger condition output of " + self.block + " written to " + str(log_file))
+        self.logger.info("Trigger condition output of " + self.name + " written to " + str(log_file))
 
         if result.returncode != 0:
             raise ValueError("Trigger condition script " + script + " failed with exit code " +
@@ -173,9 +190,9 @@ class Trigger:
                              "line, got '" + answer + "'.")
 
         if answer == "False":
-            raise TriggerConditionNotMet("Trigger condition of " + self.block + " is not met. Stopping execution.")
+            raise TriggerConditionNotMet("Trigger condition of " + self.name + " is not met. Stopping execution.")
 
-        self.logger.info("Trigger condition of " + self.block + " is met.")
+        self.logger.info("Trigger condition of " + self.name + " is met.")
 
     def write(self, current_initial_date, current_final_date, status):
         """ Writes the trigger file of the block with the given status ("Running" or "Finished"). """
@@ -187,13 +204,8 @@ class Trigger:
             self.logger.info("Output trigger not set. WRITE_TRIGGER parameter is empty.")
             return
 
-        log_path = self.yaml['ART']['LOG']['FOLDER_PATH']
-        dest_folder = os.path.join(log_path, "triggers", self.block)
-
-        if not os.path.isdir(dest_folder):
-            os.makedirs(dest_folder)
-
-        filepath = Path(dest_folder) / self._file_name(current_initial_date)
+        self.dest_folder.mkdir(parents=True, exist_ok=True)
+        filepath = self.dest_folder / self._file_name(current_initial_date)
         system_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
         with open(filepath, 'w') as file:
@@ -205,9 +217,9 @@ class Trigger:
             file.write('\n')
 
             if status == "Running":
-                file.write(self.block + ' is running for the following period:')
+                file.write(self.name + ' is running for the following period:')
             elif status == "Finished":
-                file.write(self.block + ' finished for the following period:')
+                file.write(self.name + ' finished for the following period:')
 
             file.write('\n')
             file.write('START                         : ' + file_modifier.date_to_mohid_date(current_initial_date))

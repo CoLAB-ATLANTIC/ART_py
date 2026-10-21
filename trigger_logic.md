@@ -50,10 +50,6 @@ Questions
 
 - What's the point of having check_all? all means the entire folders to watch? when would I like to do something different to all?
 
-- What's 'days_run' key for? that logic is quite confusing at the time to make the child model matches the parent's temporal resolution.
-
-- Time units for triggers included in the keywords?
-
 - do we really need the enable? enabling trigger can merely check with the existence of the trigger key, and if it exists, then it's enabled. If not, then it's disabled. 
 
 

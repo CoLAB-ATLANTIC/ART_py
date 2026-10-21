@@ -1,4 +1,5 @@
 from pathlib import Path
+from shutil import copy
 import os
 
 
@@ -20,3 +21,15 @@ def create_model_folder_structure(yaml: dict, model: dict):
         os.makedirs(model_path / "data/")
     if not os.path.isdir(model_path / "exe/"):
         os.makedirs(model_path / "exe/")
+
+
+def copy_files(files, destination: Path, label, logger):
+    """ Copies files into destination, creating it if needed. Nothing is done (no folder created) if files is empty. """
+    if len(files) == 0:
+        return
+    if not os.path.isdir(destination):
+        os.makedirs(destination)
+    for file in files:
+        file_destination = destination / os.path.split(file)[1]
+        logger.info(f"{label}: Copying {file} to {file_destination}")
+        copy(file, file_destination)

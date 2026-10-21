@@ -39,7 +39,7 @@ def execute(yaml, logger, current_initial_date, current_final_date,repeat_index)
             days_per_run = yaml['SIMULATION']['DAYS_PER_RUN']
 
             # Trigger logic execution per sub-tool
-            trigger = Trigger(yaml, logger, block)
+            trigger = Trigger.for_block(yaml, logger, block)
             trigger.check(repeat_index, current_initial_date)
             trigger.check_condition(current_initial_date, current_final_date)
 
