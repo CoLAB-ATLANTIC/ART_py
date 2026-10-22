@@ -15,6 +15,18 @@ from common.trigger import Trigger
 
 PRE_PROCESSING_STRING = "Executing PRE Processing module: "
 
+
+def run_block(logger, block, run_args, **kwargs):
+    """
+    Runs the program/script of a block and stops ART (ValueError -> error_routine) if it ends with an error,
+    i.e. with an exit code different from 0, so that the next period is not run without its pre-processing.
+    """
+    result = subprocess.run(run_args, **kwargs)
+    if result.returncode != 0:
+        logger.info(PRE_PROCESSING_STRING + "NOT SUCCESSFUL " + block + " (exit code " + str(result.returncode) + ")")
+        raise ValueError(PRE_PROCESSING_STRING + block + " ended with exit code " + str(result.returncode))
+
+
 def open_log(filename):
     status_stop = False
     f = open(filename, 'r')
@@ -57,18 +69,19 @@ def execute(yaml, logger, current_initial_date, current_final_date,repeat_index)
                 run_array = [block_dict['EXE_PATH']] + flags_array
                 if 'OUTPUT_TO_FILE' in block_keys and block_dict['OUTPUT_TO_FILE']:
                     with open(block_dict['OUTPUT_FILEPATH'], 'w') as log:
-                        subprocess.run(run_array, stdout=log, cwd=os.path.dirname(block_dict['EXE_PATH']))
+                        run_block(logger, block, run_array, stdout=log, cwd=os.path.dirname(block_dict['EXE_PATH']))
                         log.close()
                 else:
                     trigger.write(current_initial_date, current_final_date, status="Running")
                     
                     logger.info(PRE_PROCESSING_STRING + block_dict['EXE_PATH'])
-                    subprocess.run(run_array, cwd=os.path.dirname(block_dict['FLAGS']))
+                    run_block(logger, block, run_array, cwd=os.path.dirname(block_dict['FLAGS']))
                     
                     if check_log == True:
                         status_stop=open_log(filename_check)
                         if status_stop == True:
                             logger.info(PRE_PROCESSING_STRING + "NOT SUCCESSFULL " + block)
+                            raise ValueError(PRE_PROCESSING_STRING + block + " NOT SUCCESSFUL (log file " + str(filename_check) + ")")
                         else:
                             trigger.write(current_initial_date, current_final_date, status="Finished")
                     else:
@@ -77,35 +90,32 @@ def execute(yaml, logger, current_initial_date, current_final_date,repeat_index)
             else:
                 if 'OUTPUT_TO_FILE' in block_keys and block_dict['OUTPUT_TO_FILE']:
                     with open(block_dict['OUTPUT_FILEPATH'], 'w') as log:
-                        
-                        #write_trigger(yaml, logger, block, days_per_run,current_initial_date,current_final_date, status="Running")
-                        # trigger.write(current_initial_date, current_final_date, status="Running")
-
+                        trigger.write(current_initial_date, current_final_date, status="Running")
                         logger.info(PRE_PROCESSING_STRING + block_dict['EXE_PATH'])
-                        subprocess.run(block_dict['EXE_PATH'], stdout=log, cwd=os.path.dirname(block_dict['EXE_PATH']))
+                        run_block(logger, block, block_dict['EXE_PATH'], stdout=log, cwd=os.path.dirname(block_dict['EXE_PATH']))
                         log.close()
 
                     if check_log == True:
                         status_stop=open_log(filename_check)
                         if status_stop == True:
                             logger.info(PRE_PROCESSING_STRING + "NOT SUCCESSFULL " + block)
+                            raise ValueError(PRE_PROCESSING_STRING + block + " NOT SUCCESSFUL (log file " + str(filename_check) + ")")
                         else:
-                            # write_trigger(yaml, logger, block, days_per_run,current_initial_date,current_final_date, status="Finished")
                             trigger.write(current_initial_date, current_final_date, status="Finished")
                     else:
-                        # write_trigger(yaml, logger, block, days_per_run,current_initial_date,current_final_date, status="Finished")
                         trigger.write(current_initial_date, current_final_date, status="Finished")
                 else:
                     # trigger for running status before executing the sub-tool
                     trigger.write(current_initial_date, current_final_date, status="Running")
 
                     logger.info(PRE_PROCESSING_STRING + block_dict['EXE_PATH'])
-                    subprocess.run(block_dict['EXE_PATH'], cwd=os.path.dirname(block_dict['EXE_PATH']))
+                    run_block(logger, block, block_dict['EXE_PATH'], cwd=os.path.dirname(block_dict['EXE_PATH']))
                     
                     if check_log == True:
                         status_stop=open_log(filename_check)
                         if status_stop == True:
                             logger.info(PRE_PROCESSING_STRING + "NOT SUCCESSFULL " + block)
+                            raise ValueError(PRE_PROCESSING_STRING + block + " NOT SUCCESSFUL (log file " + str(filename_check) + ")")
                         else:
                             trigger.write(current_initial_date, current_final_date, status="Finished")
                     else:
