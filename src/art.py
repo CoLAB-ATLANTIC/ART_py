@@ -16,7 +16,6 @@ def open_and_validate_yaml(path):
     yaml_file = yaml_lib.open_yaml_file(path)
     return yaml_file
 
-
 def get_log_file(yaml):
     now = datetime.datetime.now()
     now_str = now.strftime("%y-%m-%d_%H%M%S")
@@ -27,7 +26,6 @@ def get_log_file(yaml):
         os.makedirs(folder_path)
 
     return folder_path / file_path
-
 
 # Modules ART knows how to run, in execution order: yaml key -> (log label, function that runs it from ART)
 KNOWN_MODULES = {
@@ -80,7 +78,6 @@ class ART:
 
     def exit_routine(self):
         self.logger.info("------------- ART RUN FINISHED -------------")
-
 
 def validate_path(path):
     return os.path.exists(path)
