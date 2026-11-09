@@ -1,0 +1,114 @@
+/*-- scss:defaults --*/
+$body-bg: #f7f8fa;
+$body-color: #1c2b3a;
+$link-color: #087e8b;
+$presentation-heading-color: #123449;
+$presentation-heading-font: "Aptos Display", "Segoe UI", sans-serif;
+$font-family-sans-serif: "Aptos", "Segoe UI", sans-serif;
+$font-family-monospace: "Cascadia Code", "DejaVu Sans Mono", monospace;
+$presentation-font-size-root: 30px;
+$presentation-h2-font-size: 1.45em;
+$presentation-h3-font-size: 1.05em;
+$code-block-font-size: 0.65em;
+
+/*-- scss:rules --*/
+.reveal .slides {
+  text-align: left;
+}
+
+.reveal h2 {
+  border-top: 6px solid #0c8c90;
+  padding-top: 0.45em;
+  margin-bottom: 0.65em;
+  letter-spacing: -0.025em;
+}
+
+.reveal h3 {
+  color: #087e8b;
+  margin-top: 0.5em;
+}
+
+.reveal .lead {
+  font-size: 1.25em;
+  line-height: 1.4;
+  color: #123449;
+  margin-bottom: 1em;
+}
+
+.reveal .takeaway {
+  background: #e4f1f0;
+  border-left: 6px solid #087e8b;
+  border-radius: 0 8px 8px 0;
+  padding: 0.3em 0.75em;
+  margin-top: 0.9em;
+}
+
+.reveal table {
+  width: 100%;
+  font-size: 0.8em;
+  line-height: 1.35;
+  margin-bottom: 0.9em;
+}
+
+.reveal table th {
+  color: #123449;
+  border-bottom: 2px solid #087e8b;
+}
+
+.reveal table th, .reveal table td {
+  padding: 0.45em 0.55em;
+}
+
+.reveal table tbody tr:nth-child(even) {
+  background: #edf1f5;
+}
+
+.reveal li {
+  margin-bottom: 0.35em;
+}
+
+.reveal pre {
+  width: 100%;
+  box-shadow: none;
+  border: 1px solid #d9e2e9;
+  border-radius: 8px;
+}
+
+.reveal .columns {
+  gap: 1.3em;
+}
+
+.reveal .footer {
+  font-size: 0.45em;
+  color: #526776;
+}
+
+.reveal .slide-number {
+  background: #123449;
+  color: white;
+}
+
+#title-slide {
+  text-align: left;
+}
+
+#title-slide h1 {
+  color: #123449;
+  font-size: 4.5em;
+  letter-spacing: -0.06em;
+}
+
+#title-slide .subtitle {
+  color: #087e8b;
+  font-size: 1.2em;
+}
+
+/* Class logic slides in the ART overview. */
+.reveal .oop-slide .mermaid svg {
+  max-height: 510px;
+  max-width: 100%;
+}
+
+.reveal .oop-slide .columns {
+  align-items: flex-start;
+}
