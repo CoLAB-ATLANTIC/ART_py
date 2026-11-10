@@ -51,6 +51,21 @@ Runs MOHID Water: writes `Model_X.dat` and the `.dat` keywords per model, gather
 - `MODELS`: one entry per nested model (`NAME`, `PATH`, `DT`, `STORAGE_PATH`, `RESULTS_LIST`, `mohidwater.dat`...).
 - `MPI`, `OPENMP`: parallel execution settings.
 
+Consolidation settings belong in `MOHID_WATER.MPI`:
+- `RUN_MOHID_CONSOLIDATION`: `1` (default) consolidates all outputs; `0` consolidates only restart files
+  and backs up decomposed outputs and `Tree.dat` under `Results_MPI` for later consolidation.
+- `MOHID_CONSOLIDATION_EXE`: consolidation executable, relative to `TREE_PATH` or absolute
+  (default `DomainDecompositionConsolidation.exe`). Use an MPI-capable executable for parallel consolidation.
+- `MOHID_CONSOLIDATION_MPI`: `1` launches consolidation through `MPI.EXE_PATH` (default `mpiexec`);
+  `0` (default) launches it directly. `srun` uses `-n`; other launchers use `-np`.
+- `MOHID_CONSOLIDATION_MAX_PROCESSORS`: optional positive processor cap. Otherwise the cap comes from
+  `SLURM_NTASKS`, CPU affinity, or CPU count. The process count is the smaller of this cap and the number of
+  distinct outputs across models, with a minimum of one process.
+
+In bypass mode all models' file lists are filtered before a single consolidation call. Original lists remain
+in `MPI*DecomposedFiles.datx`; after success, `.dat` lists retain only HDF outputs. A failed consolidation
+restores the original lists. Consolidation stdout and stderr are saved under `TREE_PATH/DomainDecomposition_Logs`.
+
 ### `PRE_PROCESSING`
 Named blocks of external tools run before the model, in order, for each period (e.g. downloading and
 interpolating forcing). Per block:

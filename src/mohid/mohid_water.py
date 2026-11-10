@@ -79,8 +79,34 @@ class MohidWater(ModelBase):
         if self.mpi_enabled and self.run_consolidation_enabled:
             self.run_ddc()
 
+    def count_consolidation_files(self):
+        """Count distinct outputs per model, ignoring duplicate MPI subdomain prefixes."""
+        main_path = Path(self.config['MAIN_PATH'])
+        total_files = 0
+        for model in self.config['MODELS'].values():
+            results_path = main_path / model['PATH'] / "res"
+            files_to_consolidate = set()
+            for filedec in results_path.glob("MPI*DecomposedFiles.dat"):
+                with open(filedec, "r") as file:
+                    for line in file:
+                        if line.strip():
+                            files_to_consolidate.add(re.sub(r"^MPI_\d+_", "", os.path.basename(line.strip())))
+            self.logger.info(f"Model {model['NAME']}: {len(files_to_consolidate)} files to consolidate")
+            total_files += len(files_to_consolidate)
+        return total_files
+
+    def available_processors(self):
+        """Use SLURM's task allocation, process CPU affinity, or the machine CPU count."""
+        if os.environ.get('SLURM_NTASKS', "").isdigit():
+            return max(1, int(os.environ['SLURM_NTASKS']))
+        if hasattr(os, "sched_getaffinity"):
+            return max(1, len(os.sched_getaffinity(0)))
+        return max(1, os.cpu_count() or 1)
+
     def run_ddc(self):
-        """ DDC is run when an MPI run is done to join all the results into a single one. """
+        """Consolidate all models, optionally using MPI with one process per distinct output,
+        limited by MOHID_CONSOLIDATION_MAX_PROCESSORS or the available processors.
+        """
         self.logger.info("Starting MOHID_DDC")
         tree_path = self.config['TREE_PATH']
         exe_path = Path(self.config['EXE_PATH'])
@@ -91,11 +117,31 @@ class MohidWater(ModelBase):
 
         ddc_output_filename = ddc_output_folder / (
                 "DomainDecomposition_" + self.current_initial_date.strftime("%Y-%m-%d") + ".log")
-        mohid_ddc_path = Path(tree_path + self._ddc_exe())
+        mohid_ddc_path = Path(tree_path) / self._ddc_exe()
+        mpi_config = self.config.get('MPI', {})
+        if mpi_config.get('MOHID_CONSOLIDATION_MPI', False):
+            if 'MOHID_CONSOLIDATION_MAX_PROCESSORS' in mpi_config:
+                max_processors = int(mpi_config['MOHID_CONSOLIDATION_MAX_PROCESSORS'])
+                if max_processors < 1:
+                    raise ValueError("MOHID_CONSOLIDATION_MAX_PROCESSORS must be at least 1.")
+            else:
+                max_processors = self.available_processors()
+            n_files = self.count_consolidation_files()
+            n_processors = min(max(1, n_files), max_processors)
+            launcher = str(mpi_config.get('EXE_PATH', "mpiexec"))
+            processors_flag = "-n" if os.path.basename(launcher) == "srun" else "-np"
+            command = [launcher, processors_flag, str(n_processors), str(mohid_ddc_path)]
+            self.logger.info(f"Starting MOHID_DDC MPI with {n_processors} processors for {n_files} files")
+        else:
+            command = [str(mohid_ddc_path), str(exe_path)]
 
+        self.logger.info("MOHID_DDC command: " + " ".join(command))
         with open(ddc_output_filename, "w+") as mohid_ddc_output_log:
-            subprocess.run([str(mohid_ddc_path), str(exe_path)], cwd=os.path.dirname(tree_path),
-                           stdout=mohid_ddc_output_log)
+            result = subprocess.run(command, cwd=os.path.dirname(tree_path), stdout=mohid_ddc_output_log,
+                                    stderr=subprocess.STDOUT)
+
+        if result.returncode != 0:
+            raise ValueError(f"MohidDDC NOT SUCCESSFUL (exit code {result.returncode}). See {ddc_output_filename}")
 
         self._verify_log(ddc_output_filename, DDC_SUCCESS_MESSAGES, "MohidDDC")
 
@@ -110,6 +156,7 @@ class MohidWater(ModelBase):
         entries. The original file is kept as MPI*DecomposedFiles.datx.
         """
         main_path = Path(self.config['MAIN_PATH'])
+        decomposed_files = []
 
         for model in self.config['MODELS'].keys():
             results_path = main_path / Path(self.config['MODELS'][model]["PATH"] + "res/")
@@ -123,13 +170,20 @@ class MohidWater(ModelBase):
                 copy(filedec, file_backup)
                 with open(filedec, "w") as filedat:
                     filedat.write(self._filter_lines(file_backup, [".fin", ".fin5"]))
+                decomposed_files.append(filedec)
 
+        # DDC reads the whole Tree.dat: every model must be filtered before it runs.
+        try:
             self.run_ddc()
+        except Exception:
+            for filedec in decomposed_files:
+                copy(filedec + "x", filedec)
+            raise
 
-            # The .fin files were already consolidated for the continuation, only the results remain
-            for filedec in mpi_decomp_files:
-                with open(filedec, "w") as filedat:
-                    filedat.write(self._filter_lines(filedec + "x", [".hdf5", ".hdf"]))
+        # The .fin files were already consolidated for the continuation, only the results remain
+        for filedec in decomposed_files:
+            with open(filedec, "w") as filedat:
+                filedat.write(self._filter_lines(filedec + "x", [".hdf5", ".hdf"]))
 
     def change_model_dat(self, model, main_path: Path):
         """ MOHID needs the file Model_1.dat to be changed, especially START and END times. This function changes

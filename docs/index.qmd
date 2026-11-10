@@ -787,12 +787,6 @@ In restart-only mode the count is computed after filtering, so only restart outp
 - Optional `RESULTS_LIST` selects original HDF filenames to archive.
 - Time-series backup runs for every configured model.
 
-::: {.notes}
-The tree shows both alternative result categories to explain the layout; a single mode does not write both.
-HAS_SOLUTION_FROM_FILE suppresses restart backup for that model. The filename option changes the date-folder
-format. Archive dates currently use start plus DAYS_PER_RUN rather than the actual month-mode end date.
-:::
-
 ## Keeping the whole execution traceable: the value of logs
 
 | Output | Location / meaning |
