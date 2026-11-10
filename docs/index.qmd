@@ -1,7 +1,7 @@
 ---
 title: "ART"
-subtitle: "Automatic Running Tool: Functionality and execution logic"
-author: "Franklin Ayala"
+subtitle: "Automatic Running Tool: migration to Python"
+author: "CoLAB +ATLANTIC"
 format:
   revealjs:
     theme: [default, art_slides.scss]
@@ -13,7 +13,7 @@ format:
     transition: fade
     background-transition: fade
     center: false
-    width: 1440
+    width: 1500
     height: 900
     margin: 0.08
     embed-resources: true
@@ -28,7 +28,7 @@ execute:
 
 ## From a simulation to a repeatable workflow
 
-One YAML configuration coordinates seamelessly the numerical modelling workflow following certain main blocks.
+One YAML configuration coordinates seamelessly the numerical modelling workflow following certain main **blocks**.
 
 ```{.yaml code-line-numbers="1-2|3-4|5-6|7-8|9-10|11-12"}
 ART:            # Module selection, stage switches, logging, email configuration
@@ -64,11 +64,13 @@ POST_PROCESSING: # Ordered tool blocks after each model period
 
 ## 1. Controling general metadata for the modelling workflow
 
-```{.yaml code-line-numbers="1-11"}
+```{.yaml code-line-numbers="1-13"}
 ART:
   PROJECT_PATH: /path/to/project
   MODULE:
     MOHID_WATER: true           # false or true
+    WW3: false                  # false or true
+    ...
   PRE_PROCESSING: true     # false or true
   RUN_SIMULATION: true     # false or true
   POST_PROCESSING: false   # false or true
@@ -102,7 +104,7 @@ Models called under modules section are going to be explicilty configured later 
 | MOHID Water | Model preparation, execution, consolidation, backups |
 | SWAN / WW3 | Registered names under integration with common logic |
 | MOHID Land | Registered name; execution handler is not implemented |
-| Empirical model | Models with no explicit executable |
+| Empirical models | Models with no explicit executable |
 
 ::: {.takeaway}
 The working model integration is MOHID Water; generic workflows can orchestrate other tools.
@@ -126,164 +128,16 @@ Known modules are dispatched in fixed order: MOHID Water, MOHID Land, SWAN, WW3.
 Modules execute sequentially. A module's complete period loop runs before dispatch moves to the next module.
 :::
 
-
-## ModelBase — the shared execution template {.oop-slide}
-
-**Abstraction:** `ModelBase(ABC)` owns the workflow; subclasses implement `run_simulation(repeat_index)`.
-
-::: {.columns}
-::: {.column width="45%"}
-### Shared state and behavior
-
-- Holds YAML, logger, model configuration, current dates, and a `Trigger` object.
-- `execute()` sets dates, creates the trigger, and selects operational or hindcast mode.
-- Each period follows the same ordered stages; YAML enables each stage independently.
-- Provides `run_executable()` and MPI / OpenMP settings for subclasses.
-:::
-::: {.column width="55%"}
-```{mermaid}
-flowchart TD
-    A["execute(): dates + Trigger"] --> B["Operational / hindcast period loop"]
-    B --> C["Pre-processing, if enabled"]
-    C --> D["Model stage, if enabled:<br/>check dependencies + condition<br/>write RUNNING"]
-    D --> E["self.run_simulation(repeat_index)<br/>Dispatch to the subclass"]
-    E --> F["Write FINISHED"]
-    F --> G["Post-processing, if enabled"]
-    G --> H["Repeat or advance period"]
-    H --> B
-```
-:::
-:::
-
-::: {.takeaway}
-**Template Method pattern:** one reusable run cycle, with model-specific behavior supplied by inheritance.
-:::
-
 ::: {.notes}
-Source: src/common/model_base.py, especially execute(), _run_period(), and run_simulation().
-ModelBase is abstract and cannot be instantiated until run_simulation is implemented.
-Operational forecasts advance their start by one day. Hindcast uses consecutive periods and supports MONTH_MODE
-and RUN_TWICE. The loop-back arrow represents those modes, not an unconditional infinite loop.
-The diagram expands the enabled simulation stage; disabling RUN_SIMULATION skips checks, writes, and simulation.
-FINISHED is written after run_simulation returns and before post-processing begins.
-:::
-
-## MohidWater — specialize the simulation step {.oop-slide}
-
-**Inheritance and polymorphism:** `MohidWater(ModelBase)` inherits `execute()` and overrides `run_simulation()`.
-
-::: {.columns}
-::: {.column width="45%"}
-### Same interface, concrete behavior
-
-```python
-class MohidWater(ModelBase):
-    def __init__(self, art):
-        super().__init__(art, "MOHID Water")
-        self.config = self.yaml['MOHID_WATER']
-
-    def run_simulation(self, repeat_index):
-        # Prepare → run → consolidate → archive
-        ...
-```
-
-The inherited period loop calls this override on the **same object**, using dates already set by ModelBase.
-:::
-::: {.column width="55%"}
-```{mermaid}
-flowchart TD
-    A["For each configured model:<br/>create folders · update Model_1.dat<br/>gather restart files"] --> B["run_mohid()"]
-    B --> C["Inherited run_executable()<br/>Serial / OpenMP / MPI"]
-    C --> D["Verify MOHID success log"]
-    D --> E{"MPI?"}
-    E -->|"Full consolidation"| F["run_ddc(): all selected outputs"]
-    E -->|"Consolidation bypass"| G["backup_decomposedfiles():<br/>run DDC for restart files only"]
-    E -->|"No"| H["backup_simulation()"]
-    F --> H
-    G --> H
-```
-:::
-:::
-
-::: {.takeaway}
-**Extension point:** another model can reuse the orchestration by implementing the same abstract method.
-:::
-
-::: {.notes}
-Source: src/mohid/mohid_water.py, especially __init__(), run_simulation(), run_mohid(),
-backup_decomposedfiles(), and backup_simulation().
+Source: src/mohid/mohid_water.py, __init__(), run_simulation(), and run_mohid().
+Excerpts omit docstrings, comments, and the path setup in run_mohid(); calls are wrapped for readability.
+The run_simulation body retains every executable statement.
 run_mohid calls run_ddc only for MPI with full consolidation enabled. With MPI consolidation bypass,
-run_simulation calls backup_decomposedfiles, which filters all model manifests before running DDC for restarts.
-Backups include restarts, time series, and either consolidated HDF files or decomposed MPI files.
-_verify_log raises ValueError on missing success messages, so ModelBase does not write FINISHED in that case.
-repeat_index is part of the common interface, although this implementation does not use it directly.
+backup_decomposedfiles filters all model manifests before running DDC for restart files only.
+_verify_log raises ValueError on missing success messages, preventing ModelBase from writing FINISHED.
+repeat_index is part of the shared interface, although this implementation does not use it directly.
 :::
 
-## Trigger — compose dependency and condition logic {.oop-slide}
-
-**Composition:** ModelBase **has a** `Trigger`; MohidWater **is a** ModelBase. Trigger does not inherit from ModelBase.
-
-::: {.columns}
-::: {.column width="44%"}
-### One helper, two contexts
-
-- `for_model()` reads top-level `TRIGGER`; `for_block()` reads a pre/post-processing block's trigger.
-- `check()` polls dependency files for `STATUS: FINISHED`.
-- `check_condition()` runs a Python script whose last nonempty output line must be `True` or `False`.
-- `write()` publishes `RUNNING` / `FINISHED` when `WRITE_TRIGGER` is enabled.
-
-**Behavior to remember:** a dependency timeout logs and continues; a false condition stops execution.
-:::
-::: {.column width="56%"}
-```{mermaid}
-flowchart TD
-    A["Trigger.for_model(...)<br/>stored as self.trigger"] --> B["check(): wait for dependencies"]
-    B -->|"Ready, skipped, or timed out"| C["check_condition(): optional script"]
-    C -->|"True / no condition"| D["write(RUNNING)"]
-    C -->|"False"| X["Raise TriggerConditionNotMet"]
-    C -->|"Script / output error"| Y["Raise ValueError"]
-    D --> E["ModelBase calls run_simulation()"]
-    E -->|"Returns successfully"| F["write(FINISHED)"]
-    F --> G["Post-processing follows"]
-```
-:::
-:::
-
-::: {.takeaway}
-**Separation of responsibilities:** ModelBase orders the work; MohidWater executes the model; Trigger coordinates readiness.
-:::
-
-::: {.notes}
-Source: src/common/trigger.py and ModelBase._run_period().
-The flow represents the enabled model stage. With ENABLE false, trigger checks and writes return immediately.
-Condition checking is independent of CHECK_ALL. A missing condition is allowed; supplying only one of
-CONDITION_SCRIPT and CONDITION_DAT raises ValueError. False raises TriggerConditionNotMet, a ValueError subclass.
-For model dependencies, the first run is checked; CHECK_ALL defaults to true and also checks repetitions.
-For block dependencies, CHECK_ALL defaults to false and only the first execution is checked when true.
-write requires both an enabled trigger and WRITE_TRIGGER true. FINISHED describes the completed model step
-including its backups; it does not certify completion of subsequent post-processing.
-:::
-
-## The period is the central unit of work
-
-```{mermaid}
-flowchart LR
-    A[Set current START / END] --> B[Pre-processing]
-    B --> C[Model dependency and condition checks]
-    C --> D[Write RUNNING]
-    D --> E[Run model and archive results]
-    E --> F[Write FINISHED]
-    F --> G[Post-processing]
-    G --> H[Repeat or advance dates]
-```
-
-- `ART.PRE_PROCESSING`, `RUN_SIMULATION`, and `POST_PROCESSING` independently enable each stage.
-- Model `FINISHED` means simulation and backup completed; post-processing follows.
-
-::: {.notes}
-This is the shared ModelBase._run_period sequence. Processing blocks have their own dependency and condition
-checks. Disabling the simulation stage also skips its model-level trigger checks and writes.
-:::
 
 ## 2. Defining simulation parameters:
 
@@ -379,25 +233,48 @@ RUN_TWICE applies in the hindcast loop. The operational loop always passes repea
 The reference date is normalized to midnight. A missing START line raises ValueError.
 :::
 
+<div class="workflow">
+  <div class="step">Set current<br>START / END</div>
+  <div class="arrow">→</div>
+  <div class="step">Pre-processing</div>
+  <div class="arrow">→</div>
+  <div class="step">Check model dependencies<br>and conditions</div>
+  <div class="arrow">→</div>
+  <div class="step">Write<br>RUNNING</div>
+  <div class="arrow">→</div>
+  <div class="step">Run model<br>and archive results</div>
+  <div class="arrow">→</div>
+  <div class="step">Write<br>FINISHED</div>
+  <div class="arrow">→</div>
+  <div class="step">Post-processing</div>
+  <div class="arrow">→</div>
+  <div class="step">Repeat or<br>advance dates</div>
+</div>
+
+
 ## 3. Triggers coordinate separate workflows
 
 Under nested modelling workflows or conditional executions, our models have to wait for a larger and coarser model to run.
 
-```{mermaid}
-flowchart LR
-    A(Parent model finishes a period) --> B[Writes dated status file]
-    B --> C[Consumer waits for file]
-    C --> D[Consumer waits for FINISHED]
-    D --> E[Consumer runs its next stage]
-```
+<div class="workflow">
+  <div class="step">Parent model<br>finishes period</div>
+  <div class="arrow">→</div>
+  <div class="step">Write dated<br>status file</div>
+  <div class="arrow">→</div>
+  <div class="step">Consumer waits<br>for file</div>
+  <div class="arrow">→</div>
+  <div class="step">Wait for<br>FINISHED</div>
+  <div class="arrow">→</div>
+  <div class="step">Run next<br>stage</div>
+</div>
+
+The date range identifies the period shared by parent and child model.
 
 ```text
 # Example of status file written by parent model
 2026-01-01_2026-01-02.dat
 STATUS                        : RUNNING/FINISHED
 ```
-
-The date range identifies the period shared by parent and child model.
 
 ::: {.notes}
 These are polling-based files, not an in-memory task scheduler. Watched folders are checked sequentially.
@@ -450,7 +327,7 @@ POST_PROCESSING:
 
 ::: {.callout-tip}
 ## Hint
-**Timeout behavior:** log the timeout and continue execution.
+**Timeout behavior:** log the timeout and continue execution (in case is not critical).
 :::
 
 ##
@@ -484,6 +361,8 @@ POST_PROCESSING:
 
 ### Conditions decide whether the workflow may proceed
 
+Condition scripts can encode data availability, thresholds, or combined decisions.
+
 ```{.yaml code-line-numbers="5-6,12-14"}
 ART:
   ...
@@ -513,12 +392,69 @@ POST_PROCESSING:
 | Last nonempty stdout line is `False` | Stop the run |
 | Nonzero exit or another final answer | Stop with an error |
 
-Condition scripts can encode data availability, thresholds, or combined decisions.
 
 ::: {.notes}
 ART uses its own Python interpreter to run the script, passing the dat path as one argument. Both paths are
 required. START/END updates default to enabled. stdout/stderr go to
 ART.LOG.FOLDER_PATH/checked_triggers/name/START_END.log. Dependency timeouts continue, but false conditions stop.
+:::
+
+## A quick look at the trigger logic {.oop-slide}
+
+ModelBase **has a** `Trigger` helper.
+
+::: {.columns}
+::: {.column width="50%"}
+### Build a helper for either context
+
+```python
+class Trigger:
+    @classmethod
+    def for_model(cls, yaml, logger, name, dest_folder):
+        return cls(
+            yaml, logger, name, yaml.get('TRIGGER'),
+            dest_folder, model_level=True)
+
+    @classmethod
+    def for_block(cls, yaml, logger, block,
+                  section='PRE_PROCESSING'):
+        return cls(
+            yaml, logger, block,
+            yaml[section][block].get('TRIGGER'),
+            Path(yaml['ART']['LOG']['FOLDER_PATH'])
+            / "triggers" / block)
+```
+
+The factory methods select model-level or processing-block configuration.
+:::
+::: {.column width="50%"}
+### Interpret the condition script's answer
+
+```python
+# Inside Trigger.check_condition()
+lines = [line.strip()
+         for line in result.stdout.splitlines()
+         if line.strip()]
+answer = lines[-1] if lines else ""
+
+if answer not in ("True", "False"):
+    raise ValueError(
+        "Trigger condition script " + script +
+        " must print True or False as its last "
+        "line, got '" + answer + "'.")
+
+if answer == "False":
+    raise TriggerConditionNotMet(
+        "Trigger condition of " + self.name +
+        " is not met. Stopping execution.")
+```
+
+`check()` waits for dependencies; `write()` publishes the model or block status.
+:::
+:::
+
+::: {.takeaway}
+**Composition:** Trigger coordinates readiness. A false condition stops the run; a dependency timeout logs and continues.
 :::
 
 ## 4. Build workflows from external tool blocks: pre-processing and post-processing
@@ -589,14 +525,19 @@ No executable is run when rendering this presentation.
 
 MOHID Water: prepare → run → consolidate → archive
 
-```{mermaid}
-flowchart LR
-    A[For each nested model] --> B[Update Model_1.dat]
-    B --> C[Collect restart files]
-    C --> D[Run MOHID once for the tree]
-    D --> E[Consolidate MPI outputs]
-    E --> F[Archive each model's results]
-```
+<div class="workflow">
+  <div class="step">For each<br>nested model</div>
+  <div class="arrow">→</div>
+  <div class="step">Update<br>Model_1.dat</div>
+  <div class="arrow">→</div>
+  <div class="step">Collect<br>restart files</div>
+  <div class="arrow">→</div>
+  <div class="step">Run MOHID once<br>for the tree</div>
+  <div class="arrow">→</div>
+  <div class="step">Consolidate<br>MPI outputs</div>
+  <div class="arrow">→</div>
+  <div class="step">Archive each<br>model's results</div>
+</div>
 
 ```{.yaml code-line-numbers="9-10"}
 ART:
@@ -622,6 +563,123 @@ The model loop creates expected folders and prepares every domain before one mod
 Restart lookup uses current start minus one day and DAYS_PER_RUN, including in hindcast mode.
 The MOHID executable and Tree.dat define the numerical domain execution. Current MohidWater does not contain
 the old boundary, meteo, or discharge gathering methods; prepare these through external tools.
+:::
+
+## ModelBase — the shared execution template {.oop-slide}
+
+`ModelBase(ABC)` owns the workflow and delegates the simulation step to each subclass.
+
+::: {.columns}
+::: {.column width="50%"}
+### Define the contract and create the helper
+
+```python
+class ModelBase(ABC):
+    @abstractmethod
+    def run_simulation(self, repeat_index: int):
+        """Run the model for the current period."""
+
+    def execute(self):
+        self._set_global_dates()
+        self.trigger = Trigger.for_model(
+            self.yaml, self.logger, self.name,
+            self._trigger_folder())
+
+        if self.yaml['SIMULATION']['OPERATIONAL_MODE']:
+            self._run_operational()
+        else:
+            self._run_hindcast()
+```
+
+`execute()` selects the period loop and stores a `Trigger` on the model.
+:::
+::: {.column width="50%"}
+### Call the subclass inside each period
+
+```python
+# Inside ModelBase._run_period()
+if artconfig.get('RUN_SIMULATION'):
+    self.trigger.check(
+        repeat_index, self.current_initial_date)
+    self.trigger.check_condition(
+        self.current_initial_date,
+        self.current_final_date)
+    self.trigger.write(
+        self.current_initial_date,
+        self.current_final_date, status="Running")
+    self.run_simulation(repeat_index)
+    self.trigger.write(
+        self.current_initial_date,
+        self.current_final_date, status="Finished")
+```
+
+`self.run_simulation(...)` dispatches to the concrete model's implementation.
+:::
+:::
+
+::: {.takeaway}
+**Template Method:** reuse the period loop; implement only the model-specific simulation step.
+:::
+
+## MohidWater — specialize the simulation step {.oop-slide}
+
+`MohidWater(ModelBase)` inherits `execute()` and implements the common `run_simulation()` interface.
+
+::: {.columns}
+::: {.column width="50%"}
+### Inherit the workflow and execution tools
+
+```python
+class MohidWater(ModelBase):
+    def __init__(self, art):
+        super().__init__(art, "MOHID Water")
+        self.config = self.yaml['MOHID_WATER']
+```
+
+```python
+# Inside MohidWater.run_mohid()
+self.run_executable(
+    exe_path, os.path.dirname(tree_path),
+    output_file_name)
+self._verify_log(
+    output_file_name, MOHID_SUCCESS_MESSAGES,
+    "MOHID RUN")
+
+if self.mpi_enabled and self.run_consolidation_enabled:
+    self.run_ddc()
+```
+
+`run_executable()` comes from ModelBase; MOHID verification and consolidation belong here.
+:::
+::: {.column width="50%"}
+### Implement the simulation step
+
+```python
+def run_simulation(self, repeat_index: int):
+    main_path = Path(self.config['MAIN_PATH'])
+    models = self.config['MODELS']
+
+    for model in models.keys():
+        folder_utils.create_model_folder_structure(
+            self.yaml, models[model])
+        self.change_model_dat(models[model], main_path)
+        self.gather_restart_files(
+            models[model], main_path)
+
+    self.run_mohid()
+
+    if not self.run_consolidation_enabled:
+        self.backup_decomposedfiles()
+
+    self.backup_simulation()
+```
+
+Prepare inputs and restarts, run MOHID, then archive the results.
+:::
+:::
+
+::: {.takeaway}
+**Inheritance and polymorphism:** the shared loop calls this override on the same model object.
 :::
 
 ## Model execution and consolidation are separate choices
@@ -684,11 +742,6 @@ POST_PROCESSING:
 | MPI | `MPI.EXE_PATH`, default `mpiexec`; uses `TOTAL_PROCESSORS` |
 | OpenMP | Direct executable or `srun`; sets configured `OMP_NUM_THREADS` |
 
-::: {.takeaway}
-MPI model execution does not automatically mean MPI consolidation.
-:::
-
-`MOHID_CONSOLIDATION_MPI` independently selects parallel DDC execution.
 
 ::: {.notes}
 MPI takes precedence if MPI and OpenMP are both enabled. MOHID success is verified through termination
@@ -698,7 +751,7 @@ it can use a launcher inside an existing allocation.
 
 ## Choose when to consolidate large results
 
-| `MPI.RUN_MOHID_CONSOLIDATION` | Full mode: `1` | Restart-only mode: `0` |
+| `RUN_MOHID_CONSOLIDATION` | Full mode: `1` | Restart-only mode: `0` |
 |---|---|---|
 | Restart files | Consolidated now | Consolidated now |
 | HDF outputs | Consolidated now | Left decomposed |
@@ -709,6 +762,10 @@ it can use a launcher inside an existing allocation.
 Restart-only mode keeps the next simulation period possible while deferring HDF consolidation.
 :::
 
+::: {.takeaway}
+MPI model execution does not automatically mean MPI consolidation.
+:::
+
 ::: {.notes}
 This switch is considered when MPI is enabled. Full mode is the default. The restart-only helper is currently
 named backup_decomposedfiles in the source. It does more than backup: it selects which files DDC consolidates.
@@ -716,15 +773,6 @@ Later HDF consolidation must be invoked separately; ART does not schedule it aut
 :::
 
 ## Restart-only consolidation must filter the whole tree
-
-```{mermaid}
-flowchart LR
-    A[Save all original lists as .datx] --> B[Keep only restart entries in all .dat lists]
-    B --> C[Run DDC once]
-    C --> D{Success?}
-    D -->|Yes| E[Keep HDF entries for later consolidation]
-    D -->|No| F[Restore original lists and raise error]
-```
 
 **Why all models first?** DDC reads the complete `Tree.dat`, so every model must present the same phase of work.
 
@@ -796,7 +844,7 @@ In restart-only mode the count is computed after filtering, so only restart outp
 | DDC log | `<TREE_PATH>/DomainDecomposition_Logs/` — stdout + stderr |
 | Model trigger | `<ART.LOG.FOLDER_PATH>/triggers/<start>_<end>.dat` |
 | Block trigger | `<ART.LOG.FOLDER_PATH>/triggers/<block>/...` |
-| Condition log | `<ART.LOG.FOLDER_PATH>/checked_triggers/<name>/...` |
+| Conditioned-trigger log | `<ART.LOG.FOLDER_PATH>/checked_triggers/<name>/...` |
 
 Handled `ValueError` failures are logged and can send an error email with the ART log attached.
 
@@ -804,51 +852,6 @@ Handled `ValueError` failures are logged and can send an error email with the AR
 The entry point catches ValueError. Other exception types do not use that same error routine.
 The current error routine exits with status zero; schedulers must not infer success from the process exit
 status alone. A success-email method exists but is not called by the normal exit routine.
-:::
-
-## Launch a tool workflow with the shared run engine
-
-::: {.columns}
-::: {.column width="53%"}
-```yaml
-ART:
-  PROJECT_PATH: /work/demo
-  LOG:
-    FOLDER_PATH: /work/demo/logs
-  MODULE:
-    FORCING_WORKFLOW: 1
-  PRE_PROCESSING: 1
-  RUN_SIMULATION: 0
-  POST_PROCESSING: 0
-SIMULATION:
-  OPERATIONAL_MODE: 0
-  START_DATE: "2026 01 01 00 00 00"
-  END_DATE: "2026 01 03 00 00 00"
-  DAYS_PER_RUN: 1
-```
-:::
-::: {.column width="47%"}
-```yaml
-# Append to the same YAML file
-PRE_PROCESSING:
-  Prepare_Forcing:
-    RUN: 1
-    EXE_PATH: /opt/tools/prepare_forcing
-    DAT_DATE_CHANGE: 1
-    CONFIG_FILEPATH: /work/forcing.dat
-```
-
-```bash
-python src/art.py /work/demo/art.yaml
-```
-
-Replace the illustrative paths with existing tools and configuration files.
-:::
-:::
-
-::: {.notes}
-This is an example for a generic module, avoiding any suggestion that a full MOHID project can be created
-from this YAML alone. The two YAML snippets form one document. Run from the repository root for this command.
 :::
 
 ## Current boundaries and practical next steps
@@ -868,7 +871,7 @@ from this YAML alone. The two YAML snippets form one document. Run from the repo
 - Complete additional model adapters.
 - Activate comprehensive YAML validation.
 - Normalize block execution and trigger writes.
-- Return nonzero process status on failures.
+- CI/CD: unit tests.
 :::
 :::
 
@@ -888,8 +891,13 @@ branches also omit writes. Date-folder and restart lookup assumptions deserve re
 | `src/common/pre_processing.py` | Tool blocks before the model |
 | `src/common/post_processing.py` | Tool blocks after the model |
 | `src/mohid/mohid_water.py` | Restart preparation, DDC, archives |
+| `src/ww3/ww3.py` | Wave model specific logic |
 | `tests/test_mohid_consolidation.py` | Consolidation regression checks |
 
 ::: {.takeaway}
 Configure the workflow in YAML; keep model-specific execution in its adapter.
 :::
+
+```bash
+python src/art.py /work/demo/art.yaml
+```
