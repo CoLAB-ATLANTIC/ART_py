@@ -151,3 +151,40 @@ $code-block-font-size: 0.65em;
   font-size: 22px;
   color: #666;
 }
+
+
+.workflow-architecture {
+  text-align: center;
+  width: 100%;
+}
+
+.arch-box {
+  background: #f1f3f5;
+  border: 1px solid #999;
+  border-radius: 7px;
+  padding: 10px;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.arch-box small {
+  font-size: 16px;
+  font-weight: normal;
+}
+
+.workflow-architecture > .arch-box {
+  width: 65%;
+  margin: auto;
+}
+
+.arch-arrow {
+  font-size: 24px;
+  padding: 5px;
+}
+
+.arch-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 15px;
+}
