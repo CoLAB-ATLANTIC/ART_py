@@ -1,7 +1,7 @@
 ---
 title: "ART"
 subtitle: "Automatic Running Tool: migration to Python"
-author: "CoLAB +ATLANTIC"
+author: "CoLAB +ATLANTIC - Manuela Juliano"
 format:
   revealjs:
     theme: [default, art_slides.scss]
@@ -803,7 +803,7 @@ status alone. A success-email method exists but is not called by the normal exit
 - Complete additional model adapters.
 
 ::: {.takeaway}
-The less amount keys in YAML the better.
+The less amount of YAML keys the better.
 :::
 
 ## Explore the implementation
@@ -816,6 +816,7 @@ The less amount keys in YAML the better.
 | `src/common/pre_processing.py` | Tool blocks before the model |
 | `src/common/post_processing.py` | Tool blocks after the model |
 | `src/mohid/mohid_water.py` | Restart preparation, DDC, archives |
+| `src/mohid/mohid_land.py` | Wave model specific logic |
 | `src/ww3/ww3.py` | Wave model specific logic |
 | `tests/test_mohid_consolidation.py` | Consolidation regression checks |
 
@@ -823,7 +824,7 @@ The less amount keys in YAML the better.
 Configure the workflow in YAML; keep model-specific execution in its adapter.
 :::
 
-## Let's collaborate:
+## Let's collaborate and make things persistent/reproducible:
 
 - **How to run the application?**:
 
